@@ -1,0 +1,28 @@
+version: '3.4'
+
+services:
+    calculator_service_thrift_server:
+        build:
+            context: .
+            dockerfile: ./server/Dockerfile
+        network_mode: host
+        expose:
+            - "5000"
+        ports:
+            - "0.0.0.0:5000:5000"
+        volumes:
+            - ./game/PingPongGame/PingPongGameServer/bin/release/netcoreapp3.1/ubuntu.18.04-x64/publish:/game
+            - ./thrift:/thrift
+    
+    ping_pong_thrift_client:
+        build:
+            context: .
+            dockerfile: ./client/Dockerfile
+        network_mode: host
+        expose:
+            - "5000"
+        ports:
+            - "0.0.0.0:5000:5000"
+        volumes:
+            - ./game/PingPongGame/PingPongGameClient/bin/release/netcoreapp3.1/ubuntu.18.04-x64/publish:/game
+            - ./thrift:/thrift
