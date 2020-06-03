@@ -24,6 +24,9 @@ using Thrift.Processor;
 
 
 
+/// <summary>
+/// Represents a position in game.
+/// </summary>
 public partial class Position : TBase
 {
   private int _x;

@@ -25,23 +25,45 @@ using Thrift.Processor;
 
 public partial class PingPongService
 {
+  /// <summary>
+  /// Ping pong service.
+  /// </summary>
   public interface IAsync
   {
+    /// <summary>
+    /// Sends self player pad position.
+    /// </summary>
+    /// <param name="playerPadPosition"></param>
     Task SendPlayerPadPositionAsync(PlayerPadPosition playerPadPosition, CancellationToken cancellationToken = default(CancellationToken));
 
+    /// <summary>
+    /// Retrieves latest player pad position.
+    /// </summary>
+    /// <param name="playerId"></param>
     Task<PlayerPadPosition> GetLatestPlayerPadPositionAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken));
 
-    Task IncreaseScoreAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken));
-
+    /// <summary>
+    /// Retrieves player score.
+    /// </summary>
+    /// <param name="playerId"></param>
     Task<int> GetPlayerScoreAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken));
 
+    /// <summary>
+    /// Retrieves ball position.
+    /// </summary>
     Task<Position> GetBallPositionAsync(CancellationToken cancellationToken = default(CancellationToken));
 
+    /// <summary>
+    /// Retrieves the assigned self player ID.
+    /// </summary>
     Task<int> GetPlayerIdAsync(CancellationToken cancellationToken = default(CancellationToken));
 
   }
 
 
+  /// <summary>
+  /// Ping pong service.
+  /// </summary>
   public class Client : TBaseClient, IDisposable, IAsync
   {
     public Client(TProtocol protocol) : this(protocol, protocol)
@@ -52,7 +74,7 @@ public partial class PingPongService
     }
     public async Task SendPlayerPadPositionAsync(PlayerPadPosition playerPadPosition, CancellationToken cancellationToken = default(CancellationToken))
     {
-      await OutputProtocol.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Call, SeqId), cancellationToken);
+      await OutputProtocol.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Oneway, SeqId), cancellationToken);
       
       var args = new SendPlayerPadPositionArgs();
       args.PlayerPadPosition = playerPadPosition;
@@ -60,21 +82,7 @@ public partial class PingPongService
       await args.WriteAsync(OutputProtocol, cancellationToken);
       await OutputProtocol.WriteMessageEndAsync(cancellationToken);
       await OutputProtocol.Transport.FlushAsync(cancellationToken);
-      
-      var msg = await InputProtocol.ReadMessageBeginAsync(cancellationToken);
-      if (msg.Type == TMessageType.Exception)
-      {
-        var x = await TApplicationException.ReadAsync(InputProtocol, cancellationToken);
-        await InputProtocol.ReadMessageEndAsync(cancellationToken);
-        throw x;
-      }
-
-      var result = new SendPlayerPadPositionResult();
-      await result.ReadAsync(InputProtocol, cancellationToken);
-      await InputProtocol.ReadMessageEndAsync(cancellationToken);
-      return;
     }
-
     public async Task<PlayerPadPosition> GetLatestPlayerPadPositionAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken))
     {
       await OutputProtocol.WriteMessageBeginAsync(new TMessage("GetLatestPlayerPadPosition", TMessageType.Call, SeqId), cancellationToken);
@@ -102,31 +110,6 @@ public partial class PingPongService
         return result.Success;
       }
       throw new TApplicationException(TApplicationException.ExceptionType.MissingResult, "GetLatestPlayerPadPosition failed: unknown result");
-    }
-
-    public async Task IncreaseScoreAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken))
-    {
-      await OutputProtocol.WriteMessageBeginAsync(new TMessage("IncreaseScore", TMessageType.Call, SeqId), cancellationToken);
-      
-      var args = new IncreaseScoreArgs();
-      args.PlayerId = playerId;
-      
-      await args.WriteAsync(OutputProtocol, cancellationToken);
-      await OutputProtocol.WriteMessageEndAsync(cancellationToken);
-      await OutputProtocol.Transport.FlushAsync(cancellationToken);
-      
-      var msg = await InputProtocol.ReadMessageBeginAsync(cancellationToken);
-      if (msg.Type == TMessageType.Exception)
-      {
-        var x = await TApplicationException.ReadAsync(InputProtocol, cancellationToken);
-        await InputProtocol.ReadMessageEndAsync(cancellationToken);
-        throw x;
-      }
-
-      var result = new IncreaseScoreResult();
-      await result.ReadAsync(InputProtocol, cancellationToken);
-      await InputProtocol.ReadMessageEndAsync(cancellationToken);
-      return;
     }
 
     public async Task<int> GetPlayerScoreAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken))
@@ -227,7 +210,6 @@ public partial class PingPongService
       _iAsync = iAsync;
       processMap_["SendPlayerPadPosition"] = SendPlayerPadPosition_ProcessAsync;
       processMap_["GetLatestPlayerPadPosition"] = GetLatestPlayerPadPosition_ProcessAsync;
-      processMap_["IncreaseScore"] = IncreaseScore_ProcessAsync;
       processMap_["GetPlayerScore"] = GetPlayerScore_ProcessAsync;
       processMap_["GetBallPosition"] = GetBallPosition_ProcessAsync;
       processMap_["GetPlayerId"] = GetPlayerId_ProcessAsync;
@@ -278,12 +260,9 @@ public partial class PingPongService
       var args = new SendPlayerPadPositionArgs();
       await args.ReadAsync(iprot, cancellationToken);
       await iprot.ReadMessageEndAsync(cancellationToken);
-      var result = new SendPlayerPadPositionResult();
       try
       {
         await _iAsync.SendPlayerPadPositionAsync(args.PlayerPadPosition, cancellationToken);
-        await oprot.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Reply, seqid), cancellationToken); 
-        await result.WriteAsync(oprot, cancellationToken);
       }
       catch (TTransportException)
       {
@@ -293,12 +272,7 @@ public partial class PingPongService
       {
         Console.Error.WriteLine("Error occurred in processor:");
         Console.Error.WriteLine(ex.ToString());
-        var x = new TApplicationException(TApplicationException.ExceptionType.InternalError," Internal error.");
-        await oprot.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Exception, seqid), cancellationToken);
-        await x.WriteAsync(oprot, cancellationToken);
       }
-      await oprot.WriteMessageEndAsync(cancellationToken);
-      await oprot.Transport.FlushAsync(cancellationToken);
     }
 
     public async Task GetLatestPlayerPadPosition_ProcessAsync(int seqid, TProtocol iprot, TProtocol oprot, CancellationToken cancellationToken)
@@ -323,34 +297,6 @@ public partial class PingPongService
         Console.Error.WriteLine(ex.ToString());
         var x = new TApplicationException(TApplicationException.ExceptionType.InternalError," Internal error.");
         await oprot.WriteMessageBeginAsync(new TMessage("GetLatestPlayerPadPosition", TMessageType.Exception, seqid), cancellationToken);
-        await x.WriteAsync(oprot, cancellationToken);
-      }
-      await oprot.WriteMessageEndAsync(cancellationToken);
-      await oprot.Transport.FlushAsync(cancellationToken);
-    }
-
-    public async Task IncreaseScore_ProcessAsync(int seqid, TProtocol iprot, TProtocol oprot, CancellationToken cancellationToken)
-    {
-      var args = new IncreaseScoreArgs();
-      await args.ReadAsync(iprot, cancellationToken);
-      await iprot.ReadMessageEndAsync(cancellationToken);
-      var result = new IncreaseScoreResult();
-      try
-      {
-        await _iAsync.IncreaseScoreAsync(args.PlayerId, cancellationToken);
-        await oprot.WriteMessageBeginAsync(new TMessage("IncreaseScore", TMessageType.Reply, seqid), cancellationToken); 
-        await result.WriteAsync(oprot, cancellationToken);
-      }
-      catch (TTransportException)
-      {
-        throw;
-      }
-      catch (Exception ex)
-      {
-        Console.Error.WriteLine("Error occurred in processor:");
-        Console.Error.WriteLine(ex.ToString());
-        var x = new TApplicationException(TApplicationException.ExceptionType.InternalError," Internal error.");
-        await oprot.WriteMessageBeginAsync(new TMessage("IncreaseScore", TMessageType.Exception, seqid), cancellationToken);
         await x.WriteAsync(oprot, cancellationToken);
       }
       await oprot.WriteMessageEndAsync(cancellationToken);
@@ -570,86 +516,6 @@ public partial class PingPongService
         sb.Append("PlayerPadPosition: ");
         sb.Append(PlayerPadPosition== null ? "<null>" : PlayerPadPosition.ToString());
       }
-      sb.Append(")");
-      return sb.ToString();
-    }
-  }
-
-
-  public partial class SendPlayerPadPositionResult : TBase
-  {
-
-    public SendPlayerPadPositionResult()
-    {
-    }
-
-    public async Task ReadAsync(TProtocol iprot, CancellationToken cancellationToken)
-    {
-      iprot.IncrementRecursionDepth();
-      try
-      {
-        TField field;
-        await iprot.ReadStructBeginAsync(cancellationToken);
-        while (true)
-        {
-          field = await iprot.ReadFieldBeginAsync(cancellationToken);
-          if (field.Type == TType.Stop)
-          {
-            break;
-          }
-
-          switch (field.ID)
-          {
-            default: 
-              await TProtocolUtil.SkipAsync(iprot, field.Type, cancellationToken);
-              break;
-          }
-
-          await iprot.ReadFieldEndAsync(cancellationToken);
-        }
-
-        await iprot.ReadStructEndAsync(cancellationToken);
-      }
-      finally
-      {
-        iprot.DecrementRecursionDepth();
-      }
-    }
-
-    public async Task WriteAsync(TProtocol oprot, CancellationToken cancellationToken)
-    {
-      oprot.IncrementRecursionDepth();
-      try
-      {
-        var struc = new TStruct("SendPlayerPadPosition_result");
-        await oprot.WriteStructBeginAsync(struc, cancellationToken);
-        await oprot.WriteFieldStopAsync(cancellationToken);
-        await oprot.WriteStructEndAsync(cancellationToken);
-      }
-      finally
-      {
-        oprot.DecrementRecursionDepth();
-      }
-    }
-
-    public override bool Equals(object that)
-    {
-      var other = that as SendPlayerPadPositionResult;
-      if (other == null) return false;
-      if (ReferenceEquals(this, other)) return true;
-      return true;
-    }
-
-    public override int GetHashCode() {
-      int hashcode = 157;
-      unchecked {
-      }
-      return hashcode;
-    }
-
-    public override string ToString()
-    {
-      var sb = new StringBuilder("SendPlayerPadPosition_result(");
       sb.Append(")");
       return sb.ToString();
     }
@@ -917,217 +783,6 @@ public partial class PingPongService
         sb.Append("Success: ");
         sb.Append(Success== null ? "<null>" : Success.ToString());
       }
-      sb.Append(")");
-      return sb.ToString();
-    }
-  }
-
-
-  public partial class IncreaseScoreArgs : TBase
-  {
-    private int _playerId;
-
-    public int PlayerId
-    {
-      get
-      {
-        return _playerId;
-      }
-      set
-      {
-        __isset.playerId = true;
-        this._playerId = value;
-      }
-    }
-
-
-    public Isset __isset;
-    public struct Isset
-    {
-      public bool playerId;
-    }
-
-    public IncreaseScoreArgs()
-    {
-    }
-
-    public async Task ReadAsync(TProtocol iprot, CancellationToken cancellationToken)
-    {
-      iprot.IncrementRecursionDepth();
-      try
-      {
-        TField field;
-        await iprot.ReadStructBeginAsync(cancellationToken);
-        while (true)
-        {
-          field = await iprot.ReadFieldBeginAsync(cancellationToken);
-          if (field.Type == TType.Stop)
-          {
-            break;
-          }
-
-          switch (field.ID)
-          {
-            case 1:
-              if (field.Type == TType.I32)
-              {
-                PlayerId = await iprot.ReadI32Async(cancellationToken);
-              }
-              else
-              {
-                await TProtocolUtil.SkipAsync(iprot, field.Type, cancellationToken);
-              }
-              break;
-            default: 
-              await TProtocolUtil.SkipAsync(iprot, field.Type, cancellationToken);
-              break;
-          }
-
-          await iprot.ReadFieldEndAsync(cancellationToken);
-        }
-
-        await iprot.ReadStructEndAsync(cancellationToken);
-      }
-      finally
-      {
-        iprot.DecrementRecursionDepth();
-      }
-    }
-
-    public async Task WriteAsync(TProtocol oprot, CancellationToken cancellationToken)
-    {
-      oprot.IncrementRecursionDepth();
-      try
-      {
-        var struc = new TStruct("IncreaseScore_args");
-        await oprot.WriteStructBeginAsync(struc, cancellationToken);
-        var field = new TField();
-        if (__isset.playerId)
-        {
-          field.Name = "playerId";
-          field.Type = TType.I32;
-          field.ID = 1;
-          await oprot.WriteFieldBeginAsync(field, cancellationToken);
-          await oprot.WriteI32Async(PlayerId, cancellationToken);
-          await oprot.WriteFieldEndAsync(cancellationToken);
-        }
-        await oprot.WriteFieldStopAsync(cancellationToken);
-        await oprot.WriteStructEndAsync(cancellationToken);
-      }
-      finally
-      {
-        oprot.DecrementRecursionDepth();
-      }
-    }
-
-    public override bool Equals(object that)
-    {
-      var other = that as IncreaseScoreArgs;
-      if (other == null) return false;
-      if (ReferenceEquals(this, other)) return true;
-      return ((__isset.playerId == other.__isset.playerId) && ((!__isset.playerId) || (System.Object.Equals(PlayerId, other.PlayerId))));
-    }
-
-    public override int GetHashCode() {
-      int hashcode = 157;
-      unchecked {
-        if(__isset.playerId)
-          hashcode = (hashcode * 397) + PlayerId.GetHashCode();
-      }
-      return hashcode;
-    }
-
-    public override string ToString()
-    {
-      var sb = new StringBuilder("IncreaseScore_args(");
-      bool __first = true;
-      if (__isset.playerId)
-      {
-        if(!__first) { sb.Append(", "); }
-        __first = false;
-        sb.Append("PlayerId: ");
-        sb.Append(PlayerId);
-      }
-      sb.Append(")");
-      return sb.ToString();
-    }
-  }
-
-
-  public partial class IncreaseScoreResult : TBase
-  {
-
-    public IncreaseScoreResult()
-    {
-    }
-
-    public async Task ReadAsync(TProtocol iprot, CancellationToken cancellationToken)
-    {
-      iprot.IncrementRecursionDepth();
-      try
-      {
-        TField field;
-        await iprot.ReadStructBeginAsync(cancellationToken);
-        while (true)
-        {
-          field = await iprot.ReadFieldBeginAsync(cancellationToken);
-          if (field.Type == TType.Stop)
-          {
-            break;
-          }
-
-          switch (field.ID)
-          {
-            default: 
-              await TProtocolUtil.SkipAsync(iprot, field.Type, cancellationToken);
-              break;
-          }
-
-          await iprot.ReadFieldEndAsync(cancellationToken);
-        }
-
-        await iprot.ReadStructEndAsync(cancellationToken);
-      }
-      finally
-      {
-        iprot.DecrementRecursionDepth();
-      }
-    }
-
-    public async Task WriteAsync(TProtocol oprot, CancellationToken cancellationToken)
-    {
-      oprot.IncrementRecursionDepth();
-      try
-      {
-        var struc = new TStruct("IncreaseScore_result");
-        await oprot.WriteStructBeginAsync(struc, cancellationToken);
-        await oprot.WriteFieldStopAsync(cancellationToken);
-        await oprot.WriteStructEndAsync(cancellationToken);
-      }
-      finally
-      {
-        oprot.DecrementRecursionDepth();
-      }
-    }
-
-    public override bool Equals(object that)
-    {
-      var other = that as IncreaseScoreResult;
-      if (other == null) return false;
-      if (ReferenceEquals(this, other)) return true;
-      return true;
-    }
-
-    public override int GetHashCode() {
-      int hashcode = 157;
-      unchecked {
-      }
-      return hashcode;
-    }
-
-    public override string ToString()
-    {
-      var sb = new StringBuilder("IncreaseScore_result(");
       sb.Append(")");
       return sb.ToString();
     }

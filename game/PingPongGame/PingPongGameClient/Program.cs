@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Thrift;
@@ -11,7 +12,7 @@ namespace PingPongGameClient {
         private const int CLIENT_WINDOW_WIDTH = 100;
         private const int CLIENT_WINDOW_HEIGHT = 30;
         private static PingPongService.Client client;
-        private static PlayerPadPosition[] players = {
+        private static readonly PlayerPadPosition[] players = {
             new PlayerPadPosition {
                 PlayerId = 0,
                 Position = new Position {
@@ -37,22 +38,28 @@ namespace PingPongGameClient {
             Y = CLIENT_WINDOW_HEIGHT / 2
         };
         private static bool hasGameFinished = false;
-        private const int MAX_SCORE = 1;
+        private const int MAX_SCORE = 2;
 
         static async Task Main(string[] args) {
+            string serverIp = "localhost";
+            if (args.Length > 0) {
+                serverIp = args[0];
+            }
             bool isGameRunning = false;
             bool hasGameStarted = false;
-            Console.SetWindowSize(CLIENT_WINDOW_WIDTH, CLIENT_WINDOW_HEIGHT);
-            Console.BufferHeight = CLIENT_WINDOW_HEIGHT;
-            Console.BufferWidth = CLIENT_WINDOW_WIDTH;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+                Console.SetWindowSize(CLIENT_WINDOW_WIDTH, CLIENT_WINDOW_HEIGHT);
+                Console.BufferHeight = CLIENT_WINDOW_HEIGHT;
+                Console.BufferWidth = CLIENT_WINDOW_WIDTH;
+            }
             try {
-                TTransport transport = new TSocketTransport("localhost", 5000);
+                TTransport transport = new TSocketTransport(serverIp, 5000);
                 TProtocol protocol = new TBinaryProtocol(transport);
                 client = new PingPongService.Client(protocol);
                 while (true) {
                     if (!isGameRunning) {
                         selfPlayerId = await client.GetPlayerIdAsync();
-                        opponentPlayerId = selfPlayerId == 0 ? 1 : 0;
+                        opponentPlayerId = selfPlayerId % 2 == 0 ? selfPlayerId + 1 : selfPlayerId - 1;
                         await client.SendPlayerPadPositionAsync(players[selfPlayerId]);
                         isGameRunning = true;
                     }
@@ -77,14 +84,13 @@ namespace PingPongGameClient {
                         if (hasGameStarted) {
                             DrawBall();
                             MoveBall();
-                            //CheckScore();
                         }
                         Thread.Sleep(100);
                         continue;
                     }
                     switch (Console.ReadKey().Key) {
                         case ConsoleKey.DownArrow:
-                            if (players[selfPlayerId].Position.Y < CLIENT_WINDOW_HEIGHT) {
+                            if (players[selfPlayerId].Position.Y < CLIENT_WINDOW_HEIGHT - 4) {
                                 players[selfPlayerId].Position.Y++;
                                 await client.SendPlayerPadPositionAsync(players[selfPlayerId]);
                             }
@@ -107,6 +113,8 @@ namespace PingPongGameClient {
                 Console.Clear();
                 Console.WriteLine(">> No hay conexión con el servidor.\n\n> Stack trace:");
                 Console.WriteLine(exception.StackTrace);
+                Console.WriteLine(exception.Message);
+                Console.WriteLine(exception.InnerException);
                 Console.Read();
             }
         }
@@ -138,6 +146,13 @@ namespace PingPongGameClient {
         private static async Task CheckScore() {
             int selfPlayerScore = await client.GetPlayerScoreAsync(selfPlayerId);
             int opponentPlayerScore = await client.GetPlayerScoreAsync(opponentPlayerId);
+            if (selfPlayerId % 2 == 0) {
+                playerOneScore = selfPlayerScore;
+                playerTwoScore = opponentPlayerScore;
+            } else {
+                playerOneScore = opponentPlayerScore;
+                playerTwoScore = selfPlayerScore;
+            }
             if (selfPlayerScore == MAX_SCORE) {
                 headerText = "You win!";
                 hasGameFinished = true;
@@ -149,6 +164,7 @@ namespace PingPongGameClient {
 
         private static async void MoveBall() {
             ballPosition = await client.GetBallPositionAsync();
+            // If ball is in the middle.
             if (ballPosition.X == (CLIENT_WINDOW_WIDTH / 2) - 1 && ballPosition.Y == (CLIENT_WINDOW_HEIGHT / 2) - 1) {
                 await CheckScore();
             }

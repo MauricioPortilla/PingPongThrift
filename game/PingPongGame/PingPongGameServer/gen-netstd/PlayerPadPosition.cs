@@ -24,6 +24,9 @@ using Thrift.Processor;
 
 
 
+/// <summary>
+/// Represents a player pad position.
+/// </summary>
 public partial class PlayerPadPosition : TBase
 {
   private int _playerId;

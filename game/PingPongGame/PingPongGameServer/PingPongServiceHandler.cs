@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,7 +7,7 @@ namespace PingPongGameServer {
     class PingPongServiceHandler : PingPongService.IAsync {
         private const int CLIENT_WINDOW_WIDTH = 100;
         private const int CLIENT_WINDOW_HEIGHT = 30;
-        private const int MAX_SCORE = 1;
+        private const int MAX_SCORE = 2;
         public readonly List<PlayerPadPosition> players = new List<PlayerPadPosition>();
         private readonly List<int> playersScore = new List<int>();
         private static Position ballPosition = new Position {
@@ -97,11 +96,6 @@ namespace PingPongGameServer {
 
         public Task<int> GetPlayerScoreAsync(int playerId, CancellationToken cancellationToken = default) {
             return Task.FromResult(playersScore[playerId]);
-        }
-
-        public Task IncreaseScoreAsync(int playerId, CancellationToken cancellationToken = default) {
-            playersScore[playerId] = playersScore[playerId] + 1;
-            return Task.CompletedTask;
         }
 
         public Task SendPlayerPadPositionAsync(PlayerPadPosition playerPadPosition, CancellationToken cancellationToken = default) {
