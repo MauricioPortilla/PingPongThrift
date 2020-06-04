@@ -15,27 +15,38 @@ struct PlayerPadPosition {
 }
 
 /**
+ * Player with given ID was not found.
+ */
+exception PlayerNotFoundException {
+    1: string message;
+}
+
+/**
  * Ping pong service.
  */
 service PingPongService {
     /**
      * Sends self player pad position.
      */
-    oneway void SendPlayerPadPosition(1: PlayerPadPosition playerPadPosition);
+    void SendPlayerPadPosition(1: PlayerPadPosition playerPadPosition);
+
     /**
-     * Retrieves latest player pad position.
+     * Retrieves latest player pad position. Throws PlayerNotFoundException if there is no a player with given ID.
      */
-    PlayerPadPosition GetLatestPlayerPadPosition(1: i32 playerId);
+    PlayerPadPosition GetLatestPlayerPadPosition(1: i32 playerId) throws (1: PlayerNotFoundException playerNotFoundException);
+
     /**
      * Retrieves player score.
      */
     i32 GetPlayerScore(1: i32 playerId);
+    
     /**
      * Retrieves ball position.
      */
     Position GetBallPosition();
+
     /**
-     * Retrieves the assigned self player ID.
+     * Joins to the game and retrieves the assigned self player ID.
      */
-    i32 GetPlayerId();
+    i32 JoinGame();
 }

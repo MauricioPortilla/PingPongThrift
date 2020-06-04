@@ -16,4 +16,4 @@ RUN ["/bin/bash", "-c", "apt-get update > /dev/null 2>&1"]
 RUN ["/bin/bash", "-c", "apt-get install -y dotnet-sdk-3.1 > /dev/null 2>&1"]
 WORKDIR /game
 EXPOSE 5000
-CMD ["/bin/bash", "-c", "thrift --gen netstd /thrift/PingPongService.thrift; cp /thrift/gen-netstd ./gen-netstd; dotnet publish -c release -r ubuntu.18.04-x64 --self-contained; cd ./bin/release/netcoreapp3.1/ubuntu.18.04-x64/publish; chmod +x ./PingPongGameServer; ./PingPongGameServer localhost"]
+CMD ["/bin/bash", "-c", "thrift --gen netstd /thrift/PingPongService.thrift; dotnet publish -c release -r ubuntu.18.04-x64 --self-contained; cd ./bin/release/netcoreapp3.1/ubuntu.18.04-x64/publish; chmod +x ./PingPongGameServer; ./PingPongGameServer"]

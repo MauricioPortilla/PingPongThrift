@@ -1,4 +1,13 @@
-﻿using System;
+﻿/**
+ * Ping pong game: a classic game made using Apache Thrift.
+ * 
+ * Created by:
+ * > Mauricio Cruz Portilla <mauricio.portilla@hotmail.com>
+ * 
+ * June 03, 2020
+ */
+
+using System;
 using Thrift.Server;
 using Thrift.Transport;
 using Thrift.Transport.Server;
@@ -19,7 +28,7 @@ namespace PingPongGameServer {
                 while (true) {
                     if (handler.players.Count == 2) {
                         if (!handler.MoveBall()) {
-                            Thread.Sleep(1000);
+                            Thread.Sleep(1000); // Let the players get the latest data before disconnect them.
                             handler.Reset();
                             Console.WriteLine(">> Game ended. Players disconnected.");
                         }

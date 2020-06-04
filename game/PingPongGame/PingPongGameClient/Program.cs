@@ -1,4 +1,13 @@
-﻿using System;
+﻿/**
+ * Ping pong game: a classic game made using Apache Thrift.
+ * 
+ * Created by:
+ * > Mauricio Cruz Portilla <mauricio.portilla@hotmail.com>
+ * 
+ * June 03, 2020
+ */
+
+using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +20,8 @@ namespace PingPongGameClient {
     class Program {
         private const int CLIENT_WINDOW_WIDTH = 100;
         private const int CLIENT_WINDOW_HEIGHT = 30;
+        private const int MAX_SCORE = 2;
+
         private static PingPongService.Client client;
         private static readonly PlayerPadPosition[] players = {
             new PlayerPadPosition {
@@ -37,16 +48,20 @@ namespace PingPongGameClient {
             X = CLIENT_WINDOW_WIDTH / 2,
             Y = CLIENT_WINDOW_HEIGHT / 2
         };
+        private static bool isGameRunning = false;
         private static bool hasGameFinished = false;
-        private const int MAX_SCORE = 2;
+        private static bool hasGameStarted = false;
 
+        /// <summary>
+        /// Creates a game instance.
+        /// </summary>
+        /// <param name="args">If first value is given, it will be considered as Server IP</param>
+        /// <returns>Task</returns>
         static async Task Main(string[] args) {
             string serverIp = "localhost";
             if (args.Length > 0) {
                 serverIp = args[0];
             }
-            bool isGameRunning = false;
-            bool hasGameStarted = false;
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
                 Console.SetWindowSize(CLIENT_WINDOW_WIDTH, CLIENT_WINDOW_HEIGHT);
                 Console.BufferHeight = CLIENT_WINDOW_HEIGHT;
@@ -58,7 +73,7 @@ namespace PingPongGameClient {
                 client = new PingPongService.Client(protocol);
                 while (true) {
                     if (!isGameRunning) {
-                        selfPlayerId = await client.GetPlayerIdAsync();
+                        selfPlayerId = await client.JoinGameAsync();
                         opponentPlayerId = selfPlayerId % 2 == 0 ? selfPlayerId + 1 : selfPlayerId - 1;
                         await client.SendPlayerPadPositionAsync(players[selfPlayerId]);
                         isGameRunning = true;
@@ -68,8 +83,7 @@ namespace PingPongGameClient {
                             var opponentPlayerData = await client.GetLatestPlayerPadPositionAsync(opponentPlayerId);
                             players[opponentPlayerId] = opponentPlayerData;
                             hasGameStarted = true;
-                        } catch (TException) {
-                            // Opponent is not available.
+                        } catch (PlayerNotFoundException) {
                             if (hasGameStarted) {
                                 headerText = "You won!";
                                 hasGameStarted = false;
@@ -90,7 +104,7 @@ namespace PingPongGameClient {
                     }
                     switch (Console.ReadKey().Key) {
                         case ConsoleKey.DownArrow:
-                            if (players[selfPlayerId].Position.Y < CLIENT_WINDOW_HEIGHT - 4) {
+                            if (players[selfPlayerId].Position.Y < (CLIENT_WINDOW_HEIGHT - 4)) {
                                 players[selfPlayerId].Position.Y++;
                                 await client.SendPlayerPadPositionAsync(players[selfPlayerId]);
                             }
@@ -119,11 +133,17 @@ namespace PingPongGameClient {
             }
         }
 
+        /// <summary>
+        /// Draws header.
+        /// </summary>
         private static void DrawHeader() {
             Console.SetCursorPosition((CLIENT_WINDOW_WIDTH / 2) - (headerText.Length / 2), 0);
             Console.Write(headerText);
         }
 
+        /// <summary>
+        /// Draws player pads.
+        /// </summary>
         private static void DrawPads() {
             Console.Clear();
             Console.SetCursorPosition(players[0].Position.X, players[0].Position.Y);
@@ -136,6 +156,9 @@ namespace PingPongGameClient {
             DrawHeader();
         }
 
+        /// <summary>
+        /// Draws game ball and redraws player pads. Sets header text to player scores.
+        /// </summary>
         private static void DrawBall() {
             headerText = playerOneScore + " - " + playerTwoScore;
             DrawPads();
@@ -143,6 +166,11 @@ namespace PingPongGameClient {
             Console.Write("*");
         }
 
+        /// <summary>
+        /// Retrieves latest players score and checks if any player has reached the maximum score to win the game.
+        /// If any player wins, the header text will show the winner and the game will end.
+        /// </summary>
+        /// <returns>Task</returns>
         private static async Task CheckScore() {
             int selfPlayerScore = await client.GetPlayerScoreAsync(selfPlayerId);
             int opponentPlayerScore = await client.GetPlayerScoreAsync(opponentPlayerId);
@@ -159,12 +187,15 @@ namespace PingPongGameClient {
             } else if (opponentPlayerScore == MAX_SCORE) {
                 headerText = "Opponent wins!";
                 hasGameFinished = true;
-            }
+            }           
         }
 
+        /// <summary>
+        /// Retrieves ball position from server, so it can be moved when it gets redrawn.
+        /// If ball is in the middle, player scores will be rechecked.
+        /// </summary>
         private static async void MoveBall() {
             ballPosition = await client.GetBallPositionAsync();
-            // If ball is in the middle.
             if (ballPosition.X == (CLIENT_WINDOW_WIDTH / 2) - 1 && ballPosition.Y == (CLIENT_WINDOW_HEIGHT / 2) - 1) {
                 await CheckScore();
             }

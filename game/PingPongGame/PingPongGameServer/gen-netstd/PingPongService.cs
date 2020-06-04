@@ -37,7 +37,7 @@ public partial class PingPongService
     Task SendPlayerPadPositionAsync(PlayerPadPosition playerPadPosition, CancellationToken cancellationToken = default(CancellationToken));
 
     /// <summary>
-    /// Retrieves latest player pad position.
+    /// Retrieves latest player pad position. Throws PlayerNotFoundException if there is no a player with given ID.
     /// </summary>
     /// <param name="playerId"></param>
     Task<PlayerPadPosition> GetLatestPlayerPadPositionAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken));
@@ -54,9 +54,9 @@ public partial class PingPongService
     Task<Position> GetBallPositionAsync(CancellationToken cancellationToken = default(CancellationToken));
 
     /// <summary>
-    /// Retrieves the assigned self player ID.
+    /// Joins to the game and retrieves the assigned self player ID.
     /// </summary>
-    Task<int> GetPlayerIdAsync(CancellationToken cancellationToken = default(CancellationToken));
+    Task<int> JoinGameAsync(CancellationToken cancellationToken = default(CancellationToken));
 
   }
 
@@ -74,7 +74,7 @@ public partial class PingPongService
     }
     public async Task SendPlayerPadPositionAsync(PlayerPadPosition playerPadPosition, CancellationToken cancellationToken = default(CancellationToken))
     {
-      await OutputProtocol.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Oneway, SeqId), cancellationToken);
+      await OutputProtocol.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Call, SeqId), cancellationToken);
       
       var args = new SendPlayerPadPositionArgs();
       args.PlayerPadPosition = playerPadPosition;
@@ -82,7 +82,21 @@ public partial class PingPongService
       await args.WriteAsync(OutputProtocol, cancellationToken);
       await OutputProtocol.WriteMessageEndAsync(cancellationToken);
       await OutputProtocol.Transport.FlushAsync(cancellationToken);
+      
+      var msg = await InputProtocol.ReadMessageBeginAsync(cancellationToken);
+      if (msg.Type == TMessageType.Exception)
+      {
+        var x = await TApplicationException.ReadAsync(InputProtocol, cancellationToken);
+        await InputProtocol.ReadMessageEndAsync(cancellationToken);
+        throw x;
+      }
+
+      var result = new SendPlayerPadPositionResult();
+      await result.ReadAsync(InputProtocol, cancellationToken);
+      await InputProtocol.ReadMessageEndAsync(cancellationToken);
+      return;
     }
+
     public async Task<PlayerPadPosition> GetLatestPlayerPadPositionAsync(int playerId, CancellationToken cancellationToken = default(CancellationToken))
     {
       await OutputProtocol.WriteMessageBeginAsync(new TMessage("GetLatestPlayerPadPosition", TMessageType.Call, SeqId), cancellationToken);
@@ -108,6 +122,10 @@ public partial class PingPongService
       if (result.__isset.success)
       {
         return result.Success;
+      }
+      if (result.__isset.playerNotFoundException)
+      {
+        throw result.PlayerNotFoundException;
       }
       throw new TApplicationException(TApplicationException.ExceptionType.MissingResult, "GetLatestPlayerPadPosition failed: unknown result");
     }
@@ -169,11 +187,11 @@ public partial class PingPongService
       throw new TApplicationException(TApplicationException.ExceptionType.MissingResult, "GetBallPosition failed: unknown result");
     }
 
-    public async Task<int> GetPlayerIdAsync(CancellationToken cancellationToken = default(CancellationToken))
+    public async Task<int> JoinGameAsync(CancellationToken cancellationToken = default(CancellationToken))
     {
-      await OutputProtocol.WriteMessageBeginAsync(new TMessage("GetPlayerId", TMessageType.Call, SeqId), cancellationToken);
+      await OutputProtocol.WriteMessageBeginAsync(new TMessage("JoinGame", TMessageType.Call, SeqId), cancellationToken);
       
-      var args = new GetPlayerIdArgs();
+      var args = new JoinGameArgs();
       
       await args.WriteAsync(OutputProtocol, cancellationToken);
       await OutputProtocol.WriteMessageEndAsync(cancellationToken);
@@ -187,14 +205,14 @@ public partial class PingPongService
         throw x;
       }
 
-      var result = new GetPlayerIdResult();
+      var result = new JoinGameResult();
       await result.ReadAsync(InputProtocol, cancellationToken);
       await InputProtocol.ReadMessageEndAsync(cancellationToken);
       if (result.__isset.success)
       {
         return result.Success;
       }
-      throw new TApplicationException(TApplicationException.ExceptionType.MissingResult, "GetPlayerId failed: unknown result");
+      throw new TApplicationException(TApplicationException.ExceptionType.MissingResult, "JoinGame failed: unknown result");
     }
 
   }
@@ -212,7 +230,7 @@ public partial class PingPongService
       processMap_["GetLatestPlayerPadPosition"] = GetLatestPlayerPadPosition_ProcessAsync;
       processMap_["GetPlayerScore"] = GetPlayerScore_ProcessAsync;
       processMap_["GetBallPosition"] = GetBallPosition_ProcessAsync;
-      processMap_["GetPlayerId"] = GetPlayerId_ProcessAsync;
+      processMap_["JoinGame"] = JoinGame_ProcessAsync;
     }
 
     protected delegate Task ProcessFunction(int seqid, TProtocol iprot, TProtocol oprot, CancellationToken cancellationToken);
@@ -260,9 +278,12 @@ public partial class PingPongService
       var args = new SendPlayerPadPositionArgs();
       await args.ReadAsync(iprot, cancellationToken);
       await iprot.ReadMessageEndAsync(cancellationToken);
+      var result = new SendPlayerPadPositionResult();
       try
       {
         await _iAsync.SendPlayerPadPositionAsync(args.PlayerPadPosition, cancellationToken);
+        await oprot.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Reply, seqid), cancellationToken); 
+        await result.WriteAsync(oprot, cancellationToken);
       }
       catch (TTransportException)
       {
@@ -272,7 +293,12 @@ public partial class PingPongService
       {
         Console.Error.WriteLine("Error occurred in processor:");
         Console.Error.WriteLine(ex.ToString());
+        var x = new TApplicationException(TApplicationException.ExceptionType.InternalError," Internal error.");
+        await oprot.WriteMessageBeginAsync(new TMessage("SendPlayerPadPosition", TMessageType.Exception, seqid), cancellationToken);
+        await x.WriteAsync(oprot, cancellationToken);
       }
+      await oprot.WriteMessageEndAsync(cancellationToken);
+      await oprot.Transport.FlushAsync(cancellationToken);
     }
 
     public async Task GetLatestPlayerPadPosition_ProcessAsync(int seqid, TProtocol iprot, TProtocol oprot, CancellationToken cancellationToken)
@@ -283,7 +309,14 @@ public partial class PingPongService
       var result = new GetLatestPlayerPadPositionResult();
       try
       {
-        result.Success = await _iAsync.GetLatestPlayerPadPositionAsync(args.PlayerId, cancellationToken);
+        try
+        {
+          result.Success = await _iAsync.GetLatestPlayerPadPositionAsync(args.PlayerId, cancellationToken);
+        }
+        catch (PlayerNotFoundException playerNotFoundException)
+        {
+          result.PlayerNotFoundException = playerNotFoundException;
+        }
         await oprot.WriteMessageBeginAsync(new TMessage("GetLatestPlayerPadPosition", TMessageType.Reply, seqid), cancellationToken); 
         await result.WriteAsync(oprot, cancellationToken);
       }
@@ -359,16 +392,16 @@ public partial class PingPongService
       await oprot.Transport.FlushAsync(cancellationToken);
     }
 
-    public async Task GetPlayerId_ProcessAsync(int seqid, TProtocol iprot, TProtocol oprot, CancellationToken cancellationToken)
+    public async Task JoinGame_ProcessAsync(int seqid, TProtocol iprot, TProtocol oprot, CancellationToken cancellationToken)
     {
-      var args = new GetPlayerIdArgs();
+      var args = new JoinGameArgs();
       await args.ReadAsync(iprot, cancellationToken);
       await iprot.ReadMessageEndAsync(cancellationToken);
-      var result = new GetPlayerIdResult();
+      var result = new JoinGameResult();
       try
       {
-        result.Success = await _iAsync.GetPlayerIdAsync(cancellationToken);
-        await oprot.WriteMessageBeginAsync(new TMessage("GetPlayerId", TMessageType.Reply, seqid), cancellationToken); 
+        result.Success = await _iAsync.JoinGameAsync(cancellationToken);
+        await oprot.WriteMessageBeginAsync(new TMessage("JoinGame", TMessageType.Reply, seqid), cancellationToken); 
         await result.WriteAsync(oprot, cancellationToken);
       }
       catch (TTransportException)
@@ -380,7 +413,7 @@ public partial class PingPongService
         Console.Error.WriteLine("Error occurred in processor:");
         Console.Error.WriteLine(ex.ToString());
         var x = new TApplicationException(TApplicationException.ExceptionType.InternalError," Internal error.");
-        await oprot.WriteMessageBeginAsync(new TMessage("GetPlayerId", TMessageType.Exception, seqid), cancellationToken);
+        await oprot.WriteMessageBeginAsync(new TMessage("JoinGame", TMessageType.Exception, seqid), cancellationToken);
         await x.WriteAsync(oprot, cancellationToken);
       }
       await oprot.WriteMessageEndAsync(cancellationToken);
@@ -522,6 +555,86 @@ public partial class PingPongService
   }
 
 
+  public partial class SendPlayerPadPositionResult : TBase
+  {
+
+    public SendPlayerPadPositionResult()
+    {
+    }
+
+    public async Task ReadAsync(TProtocol iprot, CancellationToken cancellationToken)
+    {
+      iprot.IncrementRecursionDepth();
+      try
+      {
+        TField field;
+        await iprot.ReadStructBeginAsync(cancellationToken);
+        while (true)
+        {
+          field = await iprot.ReadFieldBeginAsync(cancellationToken);
+          if (field.Type == TType.Stop)
+          {
+            break;
+          }
+
+          switch (field.ID)
+          {
+            default: 
+              await TProtocolUtil.SkipAsync(iprot, field.Type, cancellationToken);
+              break;
+          }
+
+          await iprot.ReadFieldEndAsync(cancellationToken);
+        }
+
+        await iprot.ReadStructEndAsync(cancellationToken);
+      }
+      finally
+      {
+        iprot.DecrementRecursionDepth();
+      }
+    }
+
+    public async Task WriteAsync(TProtocol oprot, CancellationToken cancellationToken)
+    {
+      oprot.IncrementRecursionDepth();
+      try
+      {
+        var struc = new TStruct("SendPlayerPadPosition_result");
+        await oprot.WriteStructBeginAsync(struc, cancellationToken);
+        await oprot.WriteFieldStopAsync(cancellationToken);
+        await oprot.WriteStructEndAsync(cancellationToken);
+      }
+      finally
+      {
+        oprot.DecrementRecursionDepth();
+      }
+    }
+
+    public override bool Equals(object that)
+    {
+      var other = that as SendPlayerPadPositionResult;
+      if (other == null) return false;
+      if (ReferenceEquals(this, other)) return true;
+      return true;
+    }
+
+    public override int GetHashCode() {
+      int hashcode = 157;
+      unchecked {
+      }
+      return hashcode;
+    }
+
+    public override string ToString()
+    {
+      var sb = new StringBuilder("SendPlayerPadPosition_result(");
+      sb.Append(")");
+      return sb.ToString();
+    }
+  }
+
+
   public partial class GetLatestPlayerPadPositionArgs : TBase
   {
     private int _playerId;
@@ -656,6 +769,7 @@ public partial class PingPongService
   public partial class GetLatestPlayerPadPositionResult : TBase
   {
     private PlayerPadPosition _success;
+    private PlayerNotFoundException _playerNotFoundException;
 
     public PlayerPadPosition Success
     {
@@ -670,11 +784,25 @@ public partial class PingPongService
       }
     }
 
+    public PlayerNotFoundException PlayerNotFoundException
+    {
+      get
+      {
+        return _playerNotFoundException;
+      }
+      set
+      {
+        __isset.playerNotFoundException = true;
+        this._playerNotFoundException = value;
+      }
+    }
+
 
     public Isset __isset;
     public struct Isset
     {
       public bool success;
+      public bool playerNotFoundException;
     }
 
     public GetLatestPlayerPadPositionResult()
@@ -703,6 +831,17 @@ public partial class PingPongService
               {
                 Success = new PlayerPadPosition();
                 await Success.ReadAsync(iprot, cancellationToken);
+              }
+              else
+              {
+                await TProtocolUtil.SkipAsync(iprot, field.Type, cancellationToken);
+              }
+              break;
+            case 1:
+              if (field.Type == TType.Struct)
+              {
+                PlayerNotFoundException = new PlayerNotFoundException();
+                await PlayerNotFoundException.ReadAsync(iprot, cancellationToken);
               }
               else
               {
@@ -746,6 +885,18 @@ public partial class PingPongService
             await oprot.WriteFieldEndAsync(cancellationToken);
           }
         }
+        else if(this.__isset.playerNotFoundException)
+        {
+          if (PlayerNotFoundException != null)
+          {
+            field.Name = "PlayerNotFoundException";
+            field.Type = TType.Struct;
+            field.ID = 1;
+            await oprot.WriteFieldBeginAsync(field, cancellationToken);
+            await PlayerNotFoundException.WriteAsync(oprot, cancellationToken);
+            await oprot.WriteFieldEndAsync(cancellationToken);
+          }
+        }
         await oprot.WriteFieldStopAsync(cancellationToken);
         await oprot.WriteStructEndAsync(cancellationToken);
       }
@@ -760,7 +911,8 @@ public partial class PingPongService
       var other = that as GetLatestPlayerPadPositionResult;
       if (other == null) return false;
       if (ReferenceEquals(this, other)) return true;
-      return ((__isset.success == other.__isset.success) && ((!__isset.success) || (System.Object.Equals(Success, other.Success))));
+      return ((__isset.success == other.__isset.success) && ((!__isset.success) || (System.Object.Equals(Success, other.Success))))
+        && ((__isset.playerNotFoundException == other.__isset.playerNotFoundException) && ((!__isset.playerNotFoundException) || (System.Object.Equals(PlayerNotFoundException, other.PlayerNotFoundException))));
     }
 
     public override int GetHashCode() {
@@ -768,6 +920,8 @@ public partial class PingPongService
       unchecked {
         if(__isset.success)
           hashcode = (hashcode * 397) + Success.GetHashCode();
+        if(__isset.playerNotFoundException)
+          hashcode = (hashcode * 397) + PlayerNotFoundException.GetHashCode();
       }
       return hashcode;
     }
@@ -782,6 +936,13 @@ public partial class PingPongService
         __first = false;
         sb.Append("Success: ");
         sb.Append(Success== null ? "<null>" : Success.ToString());
+      }
+      if (PlayerNotFoundException != null && __isset.playerNotFoundException)
+      {
+        if(!__first) { sb.Append(", "); }
+        __first = false;
+        sb.Append("PlayerNotFoundException: ");
+        sb.Append(PlayerNotFoundException== null ? "<null>" : PlayerNotFoundException.ToString());
       }
       sb.Append(")");
       return sb.ToString();
@@ -1268,10 +1429,10 @@ public partial class PingPongService
   }
 
 
-  public partial class GetPlayerIdArgs : TBase
+  public partial class JoinGameArgs : TBase
   {
 
-    public GetPlayerIdArgs()
+    public JoinGameArgs()
     {
     }
 
@@ -1313,7 +1474,7 @@ public partial class PingPongService
       oprot.IncrementRecursionDepth();
       try
       {
-        var struc = new TStruct("GetPlayerId_args");
+        var struc = new TStruct("JoinGame_args");
         await oprot.WriteStructBeginAsync(struc, cancellationToken);
         await oprot.WriteFieldStopAsync(cancellationToken);
         await oprot.WriteStructEndAsync(cancellationToken);
@@ -1326,7 +1487,7 @@ public partial class PingPongService
 
     public override bool Equals(object that)
     {
-      var other = that as GetPlayerIdArgs;
+      var other = that as JoinGameArgs;
       if (other == null) return false;
       if (ReferenceEquals(this, other)) return true;
       return true;
@@ -1341,14 +1502,14 @@ public partial class PingPongService
 
     public override string ToString()
     {
-      var sb = new StringBuilder("GetPlayerId_args(");
+      var sb = new StringBuilder("JoinGame_args(");
       sb.Append(")");
       return sb.ToString();
     }
   }
 
 
-  public partial class GetPlayerIdResult : TBase
+  public partial class JoinGameResult : TBase
   {
     private int _success;
 
@@ -1372,7 +1533,7 @@ public partial class PingPongService
       public bool success;
     }
 
-    public GetPlayerIdResult()
+    public JoinGameResult()
     {
     }
 
@@ -1424,7 +1585,7 @@ public partial class PingPongService
       oprot.IncrementRecursionDepth();
       try
       {
-        var struc = new TStruct("GetPlayerId_result");
+        var struc = new TStruct("JoinGame_result");
         await oprot.WriteStructBeginAsync(struc, cancellationToken);
         var field = new TField();
 
@@ -1448,7 +1609,7 @@ public partial class PingPongService
 
     public override bool Equals(object that)
     {
-      var other = that as GetPlayerIdResult;
+      var other = that as JoinGameResult;
       if (other == null) return false;
       if (ReferenceEquals(this, other)) return true;
       return ((__isset.success == other.__isset.success) && ((!__isset.success) || (System.Object.Equals(Success, other.Success))));
@@ -1465,7 +1626,7 @@ public partial class PingPongService
 
     public override string ToString()
     {
-      var sb = new StringBuilder("GetPlayerId_result(");
+      var sb = new StringBuilder("JoinGame_result(");
       bool __first = true;
       if (__isset.success)
       {

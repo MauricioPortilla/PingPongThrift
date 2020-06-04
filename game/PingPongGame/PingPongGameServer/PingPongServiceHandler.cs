@@ -1,4 +1,13 @@
-﻿using System;
+﻿/**
+ * Ping pong game: a classic game made using Apache Thrift.
+ * 
+ * Created by:
+ * > Mauricio Cruz Portilla <mauricio.portilla@hotmail.com>
+ * 
+ * June 03, 2020
+ */
+
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,11 +26,17 @@ namespace PingPongGameServer {
         private static bool isBallGoingUp = true;
         private static bool isBallGoingLeft = true;
 
+        /// <summary>
+        /// Clears latest players data.
+        /// </summary>
         public void Reset() {
             players.Clear();
             playersScore.Clear();
         }
 
+        /// <summary>
+        /// Puts game ball in the middle of screen.
+        /// </summary>
         private void ResetBallPosition() {
             ballPosition.X = CLIENT_WINDOW_WIDTH / 2;
             ballPosition.Y = CLIENT_WINDOW_HEIGHT / 2;
@@ -29,6 +44,10 @@ namespace PingPongGameServer {
             isBallGoingLeft = true;
         }
 
+        /// <summary>
+        /// Moves ball through game field.
+        /// </summary>
+        /// <returns>true if no player has reached the maximum score to win; false if a player reached it.</returns>
         public bool MoveBall() {
             int playerOneScore = playersScore[0];
             int playerTwoScore = playersScore[1];
@@ -74,13 +93,24 @@ namespace PingPongGameServer {
         }
 
         public Task<PlayerPadPosition> GetLatestPlayerPadPositionAsync(int playerId, CancellationToken cancellationToken = default) {
-            if (players.Count >= playerId + 1) {
-                return Task.FromResult(players[playerId]);
+            if (players.Find(player => player.PlayerId == playerId) == null) {
+                throw new PlayerNotFoundException {
+                    Message = "There is no player with ID: " + playerId
+                };
             }
-            return Task.FromResult<PlayerPadPosition>(null);
+            return Task.FromResult(players[playerId]);
         }
 
-        public Task<int> GetPlayerIdAsync(CancellationToken cancellationToken = default) {
+        public Task<int> GetPlayerScoreAsync(int playerId, CancellationToken cancellationToken = default) {
+            if (players.Find(player => player.PlayerId == playerId) == null) {
+                throw new PlayerNotFoundException {
+                    Message = "There is no player with ID: " + playerId
+                };
+            }
+            return Task.FromResult(playersScore[playerId]);
+        }
+
+        public Task<int> JoinGameAsync(CancellationToken cancellationToken = default) {
             var playerId = players.Count;
             players.Add(new PlayerPadPosition {
                 PlayerId = playerId,
@@ -92,10 +122,6 @@ namespace PingPongGameServer {
             playersScore.Add(0);
             Console.WriteLine(">> Player " + players.Count + " connected.");
             return Task.FromResult(playerId);
-        }
-
-        public Task<int> GetPlayerScoreAsync(int playerId, CancellationToken cancellationToken = default) {
-            return Task.FromResult(playersScore[playerId]);
         }
 
         public Task SendPlayerPadPositionAsync(PlayerPadPosition playerPadPosition, CancellationToken cancellationToken = default) {
